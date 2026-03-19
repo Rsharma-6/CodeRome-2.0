@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: coderomeadmin
+      MONGO_INITDB_ROOT_PASSWORD: coderomepass
+      MONGO_INITDB_DATABASE: coderomedb
+    volumes:
+      - mongo_data:/data/db
+
+  compiler-service:
+    build: ./compiler-service
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/coderomes:/tmp/coderomes
+    depends_on:
+      - redis
+
+  storage-service:
+    build: ./storage-service
+    ports:
+      - "5002:5002"
+    environment:
+      PORT: 5002
+      MONGODB_URI: mongodb://coderomeadmin:coderomepass@mongodb:27017/coderomedb?authSource=admin
+    depends_on:
+      - mongodb
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      STORAGE_SERVICE_URL: http://storage-service:5002
+      COMPILER_SERVICE_URL: http://compiler-service:5001
+      JWT_ACCESS_SECRET: change_this_access_secret_in_production
+      JWT_REFRESH_SECRET: change_this_refresh_secret_in_production
+    depends_on:
+      - redis
+      - storage-service
+      - compiler-service
+
+  realtime-service:
+    build: ./realtime-service
+    ports:
+      - "5003:5003"
+    environment:
+      PORT: 5003
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      STORAGE_SERVICE_URL: http://storage-service:5002
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      CLIENT_URL: http://localhost:5173
+    depends_on:
+      - redis
+      - storage-service
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_GATEWAY_URL: http://localhost:5000
+      VITE_REALTIME_URL: http://localhost:5003
+    depends_on:
+      - api-gateway
+      - realtime-service
+
+volumes:
+  redis_data:
+  mongo_data:

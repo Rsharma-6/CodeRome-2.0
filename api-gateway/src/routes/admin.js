@@ -170,6 +170,14 @@ router.get('/rooms', async (req, res) => {
 router.delete('/rooms/:roomId', async (req, res) => {
   try {
     const { roomId } = req.params;
+
+    // Clear activeRoom tracking for all members before deleting room keys
+    const usersRaw = await redis.hgetall(`room:${roomId}:users`) || {};
+    const activeRoomKeys = Object.values(usersRaw)
+      .map(raw => { try { const d = JSON.parse(raw); return d.userId ? `user:${d.userId}:activeRoom` : null; } catch { return null; } })
+      .filter(Boolean);
+    if (activeRoomKeys.length > 0) await redis.del(...activeRoomKeys);
+
     const keys = await redis.keys(`room:${roomId}:*`);
     if (keys.length > 0) {
       await redis.del(...keys);

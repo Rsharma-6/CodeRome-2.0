@@ -16,6 +16,7 @@ import AdminProblems from './components/admin/AdminProblems';
 import ProblemForm from './components/admin/ProblemForm';
 import AdminUsers from './components/admin/AdminUsers';
 import AdminRooms from './components/admin/AdminRooms';
+import MyRooms from './components/MyRooms';
 
 function AdminRoute({ children }) {
   const { user } = useAuth();
@@ -35,6 +36,7 @@ function App() {
         <Route path="/problems/:id" element={<ProblemDetail />} />
         <Route path="/room/:roomId" element={<EditorPage />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/my-rooms" element={<MyRooms />} />
         {/* Legacy route — keep old home page accessible */}
         <Route path="/editor/:roomId" element={<EditorPage />} />
         <Route path="/home" element={<Home />} />

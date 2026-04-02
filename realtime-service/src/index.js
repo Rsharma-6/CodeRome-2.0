@@ -58,24 +58,27 @@ app.use('/admin/queues', bullBoardAdapter.getRouter());
 // Room Helpers
 // ---------------------
 async function addUserToRoom(roomId, socketId, username, userId = null, role = 'editor') {
-  await redis.hset(`room:${roomId}:users`, socketId, JSON.stringify({ username, userId, role }));
+  const key = userId || socketId;
+  await redis.hset(`room:${roomId}:users`, key, JSON.stringify({ username, userId, role, socketId }));
 }
 
-async function removeUserFromRoom(roomId, socketId) {
-  await redis.hdel(`room:${roomId}:users`, socketId);
+async function removeUserFromRoom(roomId, userId, socketId) {
+  const key = userId || socketId;
+  await redis.hdel(`room:${roomId}:users`, key);
 }
 
 async function getAllConnectedClients(roomId) {
   const users = await redis.hgetall(`room:${roomId}:users`) || {};
-  return Object.keys(users).map((socketId) => {
-    const data = JSON.parse(users[socketId]);
-    return { socketId, ...data };
-  });
+  return Object.values(users).map(raw => JSON.parse(raw));
 }
 
-async function getUserData(roomId, socketId) {
-  const user = await redis.hget(`room:${roomId}:users`, socketId);
-  return user ? JSON.parse(user) : null;
+async function getUserDataBySocketId(roomId, socketId) {
+  const users = await redis.hgetall(`room:${roomId}:users`) || {};
+  for (const raw of Object.values(users)) {
+    const data = JSON.parse(raw);
+    if (data.socketId === socketId) return data;
+  }
+  return null;
 }
 
 async function saveRoomUpdate(roomId, update) {
@@ -110,7 +113,29 @@ setInterval(() => {
 io.on('connection', (socket) => {
   // --- Room ---
   socket.on(ACTIONS.JOIN, async ({ roomId, username, userId, role, problemId }) => {
+    // Deduplicate: kick existing socket for this userId
+    if (userId) {
+      const existing = await redis.hget(`room:${roomId}:users`, userId);
+      if (existing) {
+        const existingData = JSON.parse(existing);
+        const oldSocket = io.sockets.sockets.get(existingData.socketId);
+        if (oldSocket && oldSocket.id !== socket.id) {
+          await redis.hdel(`room:${roomId}:users`, userId);
+          oldSocket.emit(ACTIONS.KICKED, { kickedBy: 'session replaced' });
+          oldSocket.disconnect(true);
+        }
+      }
+      await redis.set(`user:${userId}:activeRoom`, roomId, 'EX', 86400);
+    }
+
     await addUserToRoom(roomId, socket.id, username, userId || null, role || 'editor');
+
+    // Cancel any pending expiry — room is active again
+    await redis.persist(`room:${roomId}:users`);
+    await redis.persist(`room:${roomId}:problemId`);
+    await redis.persist(`room:${roomId}:updates`);
+    await redis.persist(`room:${roomId}:creator`);
+
     socket.join(roomId);
 
     // Track room creator (first joiner)
@@ -138,6 +163,24 @@ io.on('connection', (socket) => {
     } catch {
       socket.emit(ACTIONS.CHAT_HISTORY, { messages: [] });
     }
+
+    // If no live code updates in Redis, load persisted snapshot from MongoDB
+    const updateCount = await redis.llen(`room:${roomId}:updates`);
+    if (updateCount === 0) {
+      try {
+        const { data: room } = await axios.get(`${STORAGE_URL()}/rooms/${roomId}`);
+        if (room.code) socket.emit(ACTIONS.CODE_CHANGE, { update: { type: 'init', code: room.code } });
+        if (room.problemId && !storedProblemId) socket.emit(ACTIONS.PROBLEM_CHANGED, { problemId: room.problemId, changedBy: null });
+        if (room.language) socket.emit('room:language', { language: room.language });
+      } catch {
+        // room not in MongoDB yet — new room, ignore
+      }
+    }
+
+    // Add user to room members in MongoDB (non-blocking)
+    if (userId) {
+      axios.patch(`${STORAGE_URL()}/rooms/${roomId}`, { addMember: userId }).catch(() => {});
+    }
   });
 
   // --- Kick Member ---
@@ -146,8 +189,8 @@ io.on('connection', (socket) => {
     if (creator !== socket.id) return;
     const targetSocket = io.sockets.sockets.get(targetSocketId);
     if (!targetSocket) return;
-    const kickerData = await getUserData(roomId, socket.id);
-    const targetData = await getUserData(roomId, targetSocketId);
+    const kickerData = await getUserDataBySocketId(roomId, socket.id);
+    const targetData = await getUserDataBySocketId(roomId, targetSocketId);
     targetSocket.emit(ACTIONS.KICKED, { kickedBy: kickerData?.username || 'Room creator' });
     targetSocket.disconnect(true);
     logger.info('Member kicked', { roomId, targetSocketId, kickedBy: socket.id, kickedUser: targetData?.username });
@@ -170,7 +213,7 @@ io.on('connection', (socket) => {
   socket.on(ACTIONS.SYNC_CODE, async ({ socketId, roomId }) => {
     const updates = await getRoomUpdates(roomId);
     updates.forEach((update) => {
-      socket.to(socketId).emit(ACTIONS.CODE_CHANGE, { update });
+      io.to(socketId).emit(ACTIONS.CODE_CHANGE, { update });
     });
   });
 
@@ -184,7 +227,7 @@ io.on('connection', (socket) => {
 
   // --- Chat ---
   socket.on(ACTIONS.CHAT_SEND, async ({ roomId, content }) => {
-    const userData = await getUserData(roomId, socket.id);
+    const userData = await getUserDataBySocketId(roomId, socket.id);
     if (!userData) return;
 
     const message = {
@@ -220,6 +263,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  // --- Save Code Snapshot ---
+  socket.on(ACTIONS.SAVE_CODE, async ({ roomId, code, language }) => {
+    if (!roomId || code === undefined) return;
+    axios.patch(`${STORAGE_URL()}/rooms/${roomId}`, { code, language }).catch(() => {});
+  });
+
   // --- Video Signaling ---
   socket.on(ACTIONS.VIDEO_JOIN, ({ roomId }) => {
     socket.to(roomId).emit(ACTIONS.VIDEO_JOIN, { socketId: socket.id });
@@ -245,20 +294,29 @@ io.on('connection', (socket) => {
   socket.on('disconnecting', async () => {
     const rooms = [...socket.rooms].filter(r => r !== socket.id);
     for (const roomId of rooms) {
-      const clients = await getAllConnectedClients(roomId);
-      const user = clients.find(c => c.socketId === socket.id);
+      const user = await getUserDataBySocketId(roomId, socket.id);
       logger.info('User left room', { roomId, username: user?.username, socketId: socket.id });
       socket.to(roomId).emit(ACTIONS.DISCONNECTED, {
         socketId: socket.id,
         username: user?.username,
       });
       socket.to(roomId).emit(ACTIONS.VIDEO_LEAVE, { socketId: socket.id });
-      await removeUserFromRoom(roomId, socket.id);
+      await removeUserFromRoom(roomId, user?.userId, socket.id);
 
-      // Clean up problemId when room is empty
+      // Give user a 5-minute grace window to rejoin before clearing their active room
+      if (user?.userId) {
+        const currentActive = await redis.get(`user:${user.userId}:activeRoom`);
+        if (currentActive === roomId) await redis.expire(`user:${user.userId}:activeRoom`, 5 * 60);
+      }
+
+      // When room is empty, keep keys alive for 5 minutes so users can rejoin
       const remaining = await getAllConnectedClients(roomId);
       if (remaining.length === 0) {
-        await redis.del(`room:${roomId}:problemId`, `room:${roomId}:updates`, `room:${roomId}:creator`);
+        const TTL = 5 * 60; // 5 minutes
+        await redis.expire(`room:${roomId}:users`, TTL);
+        await redis.expire(`room:${roomId}:problemId`, TTL);
+        await redis.expire(`room:${roomId}:updates`, TTL);
+        await redis.expire(`room:${roomId}:creator`, TTL);
       }
     }
   });

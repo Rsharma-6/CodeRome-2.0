@@ -28,4 +28,5 @@ module.exports = {
   // Room management
   KICK_MEMBER: 'kick:member',
   KICKED: 'kicked',
+  SAVE_CODE: 'save-code',
 };

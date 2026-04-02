@@ -30,12 +30,16 @@ app.use((req, res, next) => {
 app.use('/admin/queues', bullBoardAdapter.getRouter());
 
 const adminRoutes = require('./routes/admin');
+const roomsRoutes = require('./routes/rooms');
+const roomsGatewayRoutes = require('./routes/roomsGateway');
 
 // Routes
 app.use('/auth', authRoutes);
 app.use('/problems', problemsRoutes);
 app.use('/', compileRoutes);
 app.use('/admin', adminRoutes);
+app.use('/user', roomsRoutes);
+app.use('/rooms', roomsGatewayRoutes);
 
 // Proxy to storage-service for user progress (public)
 app.get('/users/:id', async (req, res) => {

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../context/AuthContext';
-import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import CreateRoomModal from '../CreateRoomModal';
 
 const DIFFICULTIES = ['all', 'easy', 'medium', 'hard'];
 
@@ -13,12 +13,22 @@ export default function ProblemList() {
   const [filter, setFilter] = useState({ difficulty: 'all', search: '' });
   const [joinRoomId, setJoinRoomId] = useState('');
   const [showJoinInput, setShowJoinInput] = useState(false);
+  const [activeRoom, setActiveRoom] = useState(null);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [createRoomProblemId, setCreateRoomProblemId] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchProblems();
   }, [filter]);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get('/user/active-room')
+      .then(({ data }) => { if (data.roomId) setActiveRoom(data.roomId); })
+      .catch(() => {});
+  }, [user]);
 
   async function fetchProblems() {
     setLoading(true);
@@ -36,8 +46,13 @@ export default function ProblemList() {
   }
 
   function handleSolveWithTeam(problemId) {
-    const roomId = uuidv4();
-    navigate(`/room/${roomId}`, { state: { problemId, username: user?.username || 'Guest' } });
+    setCreateRoomProblemId(problemId || null);
+    setShowCreateRoom(true);
+  }
+
+  function handleRoomCreated(roomId) {
+    setShowCreateRoom(false);
+    navigate(`/room/${roomId}`, { state: { username: user?.username } });
   }
 
   function handleJoinRoom(e) {
@@ -48,6 +63,7 @@ export default function ProblemList() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-bg">
       {/* Navbar */}
       <nav className="border-b border-border px-6 py-4 flex items-center justify-between">
@@ -77,18 +93,31 @@ export default function ProblemList() {
                   Join Room
                 </button>
               )}
-              <Link to="/room/new" className="btn-primary text-sm" onClick={(e) => {
-                e.preventDefault();
-                navigate(`/room/${uuidv4()}`, { state: { username: user.username } });
-              }}>
+              <Link to="/my-rooms" className="btn-secondary text-sm">My Rooms</Link>
+              <button onClick={() => handleSolveWithTeam(null)} className="btn-primary text-sm">
                 New Room
-              </Link>
+              </button>
             </>
           ) : (
             <Link to="/login" className="btn-primary text-sm">Login</Link>
           )}
         </div>
       </nav>
+
+      {activeRoom && (
+        <div className="bg-blue-950 border-b border-primary/40 px-6 py-3 flex items-center justify-between">
+          <span className="text-sm text-white">You have an active room session.</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/room/${activeRoom}`, { state: { username: user.username } })}
+              className="btn-primary text-sm px-4 py-1.5"
+            >
+              Rejoin Room
+            </button>
+            <button onClick={() => setActiveRoom(null)} className="text-muted hover:text-white text-sm">Dismiss</button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Filters */}
@@ -182,5 +211,14 @@ export default function ProblemList() {
         </div>
       </div>
     </div>
+
+      {showCreateRoom && (
+        <CreateRoomModal
+          problemId={createRoomProblemId}
+          onClose={() => setShowCreateRoom(false)}
+          onCreated={handleRoomCreated}
+        />
+      )}
+    </>
   );
 }

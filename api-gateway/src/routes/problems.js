@@ -26,6 +26,40 @@ router.get('/:id', optionalAuth, async (req, res) => {
   }
 });
 
+// POST /problems/:id/run — run visible test cases only (synchronous)
+router.post('/:id/run', optionalAuth, async (req, res) => {
+  try {
+    const { code, language } = req.body;
+    if (!code || !language) return res.status(400).json({ error: 'code and language are required' });
+
+    const COMPILER_URL = () => process.env.COMPILER_SERVICE_URL || 'http://localhost:5001';
+
+    const { data: tcData } = await axios.get(
+      `${STORAGE_URL()}/problems/${req.params.id}/all-testcases?language=${language}`
+    );
+    const { testCases, driverCode } = tcData;
+    const visibleCases = testCases.filter(tc => !tc.isHidden).slice(0, 3);
+    const fullCode = driverCode ? `${code}\n\n${driverCode}` : code;
+
+    const results = await Promise.all(visibleCases.map(async (tc) => {
+      try {
+        const { data } = await axios.post(`${COMPILER_URL()}/compile`, {
+          code: fullCode, language, stdin: tc.input,
+        }, { timeout: 15000 });
+        const actual = (data.output || '').trim();
+        const expected = (tc.expectedOutput || '').trim();
+        return { input: tc.input, expected, actual, passed: !data.error && actual === expected, error: data.error || null };
+      } catch {
+        return { input: tc.input, expected: tc.expectedOutput, actual: '', passed: false, error: 'Execution failed' };
+      }
+    }));
+
+    res.json({ results });
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: err.message });
+  }
+});
+
 // POST /problems/:id/submit
 router.post('/:id/submit', optionalAuth, async (req, res) => {
   try {

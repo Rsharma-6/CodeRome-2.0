@@ -6,6 +6,7 @@ const logger = require('./config/logger');
 const usersRouter = require('./routes/users');
 const problemsRouter = require('./routes/problems');
 const submissionsRouter = require('./routes/submissions');
+const roomsRouter = require('./routes/rooms');
 
 const app = express();
 app.use(cors());
@@ -21,6 +22,7 @@ app.use((req, res, next) => {
 app.use('/users', usersRouter);
 app.use('/problems', problemsRouter);
 app.use('/submissions', submissionsRouter);
+app.use('/rooms', roomsRouter);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'storage-service' }));
 

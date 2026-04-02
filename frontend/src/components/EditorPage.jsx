@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
@@ -24,6 +24,8 @@ const API_GATEWAY = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:50
 export default function EditorPage() {
   const [clients, setClients] = useState([]);
   const [output, setOutput] = useState('');
+  const [runResults, setRunResults] = useState(null); // structured test results from /run
+  const [activeTestTab, setActiveTestTab] = useState(0);
   const [isCompileWindowOpen, setIsCompileWindowOpen] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('python3');
@@ -49,12 +51,31 @@ export default function EditorPage() {
   const Location = useLocation();
   const navigate = useNavigate();
   const { roomId } = useParams();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
-  const username = Location.state?.username || user?.username || 'Guest';
+  const [stateReady, setStateReady] = useState(!!Location.state);
+  const [resolvedUsername, setResolvedUsername] = useState(Location.state?.username || user?.username || null);
+
+  const username = resolvedUsername || 'Guest';
   const problemId = Location.state?.problemId;
 
   useEffect(() => { outputRef.current = output; }, [output]);
+
+  // If there's no navigation state (e.g. page refresh), check if user has an active room
+  useEffect(() => {
+    if (Location.state) return;
+    if (!user) { navigate('/', { replace: true }); return; }
+    api.get('/user/active-room')
+      .then(({ data }) => {
+        if (data.roomId === roomId) {
+          setResolvedUsername(user.username);
+          setStateReady(true);
+        } else {
+          navigate('/', { replace: true });
+        }
+      })
+      .catch(() => navigate('/', { replace: true }));
+  }, []);
 
   function getStub(lang, stubs) {
     return stubs?.find(s => s.language === lang)?.starterCode || '';
@@ -77,6 +98,7 @@ export default function EditorPage() {
   }, [problemId]);
 
   useEffect(() => {
+    if (!stateReady || authLoading) return;
     const init = async () => {
       socketRef.current = await initSocket();
 
@@ -146,7 +168,15 @@ export default function EditorPage() {
 
       // Kicked from room
       socketRef.current.on(ACTIONS.KICKED, ({ kickedBy }) => {
-        toast.error(`You were removed from the room by ${kickedBy}`);
+        if (kickedBy === 'session replaced') {
+          toast('Your session was replaced in another tab');
+        } else {
+          toast.error(`You were removed from the room by ${kickedBy}`);
+        }
+        // Disable reconnection before disconnecting so the kicked tab
+        // doesn't auto-reconnect and re-join the room as a ghost user
+        socketRef.current.io.opts.reconnection = false;
+        socketRef.current.disconnect();
         navigate('/problems');
       });
 
@@ -168,10 +198,19 @@ export default function EditorPage() {
     };
 
     init();
+
+    // Save code snapshot every 60 seconds
+    const saveInterval = setInterval(() => {
+      if (socketRef.current && codeRef.current) {
+        socketRef.current.emit(ACTIONS.SAVE_CODE, { roomId, code: codeRef.current, language: selectedLanguage });
+      }
+    }, 60000);
+
     return () => {
+      clearInterval(saveInterval);
       socketRef.current?.disconnect();
     };
-  }, []);
+  }, [stateReady, authLoading]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -199,8 +238,12 @@ export default function EditorPage() {
     };
   }, [isResizing, isResizingLeft, isResizingRight]);
 
-  if (!Location.state) {
-    return <Navigate to="/" />;
+  if (!stateReady) {
+    return (
+      <div className="h-screen bg-bg flex items-center justify-center">
+        <span className="text-muted text-sm">Reconnecting to room...</span>
+      </div>
+    );
   }
 
   function handleLanguageChange(newLang) {
@@ -208,6 +251,7 @@ export default function EditorPage() {
     const currentStub = getStub(selectedLanguage, problem?.codeStubs);
     const hasCustomCode = codeRef.current?.trim() && codeRef.current.trim() !== currentStub?.trim();
     setSelectedLanguage(newLang);
+    setRunResults(null);
     if (newStub && (!hasCustomCode || window.confirm('Load starter code for this language? This will replace your current code.'))) {
       setEditorCodeRef.current?.(newStub);
     }
@@ -223,34 +267,31 @@ export default function EditorPage() {
     setOutput('Running...');
 
     setupTimerRef.current = setTimeout(() => {
-      setOutput(
-        'Setting up language environment, please wait...\n' +
-        'This may take 1-2 minutes the first time this language is used.'
-      );
+      setOutput('Setting up language environment, please wait...\nThis may take 1-2 minutes the first time this language is used.');
     }, 5000);
 
     try {
-      const stub = problem?.codeStubs?.find(s => s.language === selectedLanguage);
-      const fullCode = stub?.driverCode
-        ? `${codeRef.current}\n\n${stub.driverCode}`
-        : codeRef.current;
+      let result;
 
-      const { data } = await axios.post(`${API_GATEWAY}/compile`, {
-        code: fullCode,
-        language: selectedLanguage,
-        stdin: '',
-      }, { timeout: 120000 });
+      if (currentProblemId) {
+        // Run against visible test cases (LeetCode-style)
+        const { data } = await api.post(`/problems/${currentProblemId}/run`, {
+          code: codeRef.current,
+          language: selectedLanguage,
+        });
+        setRunResults(data.results);
+        setActiveTestTab(0);
+        result = data.results.map((r, i) => `Test ${i + 1}: ${r.passed ? '✓' : '✗'}`).join('  ');
+      } else {
+        // No problem loaded — free compile
+        const stub = problem?.codeStubs?.find(s => s.language === selectedLanguage);
+        const fullCode = stub?.driverCode ? `${codeRef.current}\n\n${stub.driverCode}` : codeRef.current;
+        const { data } = await axios.post(`${API_GATEWAY}/compile`, { code: fullCode, language: selectedLanguage, stdin: '' }, { timeout: 120000 });
+        result = data.output || data.error || JSON.stringify(data);
+      }
 
-      const result = data.output || data.error || JSON.stringify(data);
       setOutput(result);
-
-      socketRef.current?.emit(ACTIONS.SYNC_OUTPUT, {
-        roomId,
-        output: result,
-        language: selectedLanguage,
-        triggeredBy: username,
-      });
-
+      socketRef.current?.emit(ACTIONS.SYNC_OUTPUT, { roomId, output: result, language: selectedLanguage, triggeredBy: username });
       toast.success('Code executed');
     } catch (err) {
       const errMsg = err.response?.data?.error || err.message || 'Execution failed';
@@ -349,7 +390,12 @@ export default function EditorPage() {
           <button onClick={copyRoomId} className="btn-secondary text-sm px-3 py-1.5">
             Share Room
           </button>
-          <button onClick={() => navigate('/')} className="btn-danger text-sm px-3 py-1.5">
+          <button onClick={() => {
+            if (socketRef.current && codeRef.current) {
+              socketRef.current.emit(ACTIONS.SAVE_CODE, { roomId, code: codeRef.current, language: selectedLanguage });
+            }
+            navigate('/');
+          }} className="btn-danger text-sm px-3 py-1.5">
             Leave
           </button>
         </div>
@@ -444,13 +490,60 @@ export default function EditorPage() {
               onMouseDown={() => setIsResizing(true)}
               className="h-1.5 cursor-ns-resize bg-border hover:bg-primary transition-colors"
             />
-            <div className="flex items-center justify-between px-4 py-2">
+            <div className="flex items-center justify-between px-4 py-2 flex-shrink-0">
               <span className="text-sm font-medium">Output</span>
-              <button onClick={() => setIsCompileWindowOpen(false)} className="text-muted hover:text-white text-sm">✕</button>
+              <button onClick={() => { setIsCompileWindowOpen(false); setRunResults(null); }} className="text-muted hover:text-white text-sm">✕</button>
             </div>
-            <pre className="px-4 pb-3 text-sm font-code text-green-400 overflow-y-auto" style={{ maxHeight: `${compilerHeight - 60}px` }}>
-              {output || 'No output yet.'}
-            </pre>
+
+            {runResults ? (
+              <div className="flex flex-col overflow-hidden" style={{ maxHeight: `${compilerHeight - 52}px` }}>
+                {/* Test tabs */}
+                <div className="flex gap-1 px-4 pb-2 flex-shrink-0">
+                  {runResults.map((r, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveTestTab(i)}
+                      className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+                        activeTestTab === i
+                          ? r.passed ? 'bg-green-900 text-green-300 border border-green-600' : 'bg-red-900 text-red-300 border border-red-600'
+                          : 'bg-surface text-muted border border-border hover:text-white'
+                      }`}
+                    >
+                      {r.passed ? '✓' : '✗'} Case {i + 1}
+                    </button>
+                  ))}
+                </div>
+                {/* Test detail */}
+                {runResults[activeTestTab] && (
+                  <div className="px-4 pb-3 overflow-y-auto text-xs font-code space-y-3">
+                    <div>
+                      <div className="text-muted mb-1">Input</div>
+                      <pre className="bg-bg rounded p-2 text-white">{runResults[activeTestTab].input || '(none)'}</pre>
+                    </div>
+                    <div>
+                      <div className="text-muted mb-1">Expected Output</div>
+                      <pre className="bg-bg rounded p-2 text-green-400">{runResults[activeTestTab].expected}</pre>
+                    </div>
+                    <div>
+                      <div className="text-muted mb-1">Your Output</div>
+                      <pre className={`bg-bg rounded p-2 ${runResults[activeTestTab].passed ? 'text-green-400' : 'text-red-400'}`}>
+                        {runResults[activeTestTab].actual || '(no output)'}
+                      </pre>
+                    </div>
+                    {runResults[activeTestTab].error && (
+                      <div>
+                        <div className="text-muted mb-1">Error</div>
+                        <pre className="bg-bg rounded p-2 text-red-400">{runResults[activeTestTab].error}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <pre className="px-4 pb-3 text-sm font-code text-green-400 overflow-y-auto" style={{ maxHeight: `${compilerHeight - 60}px` }}>
+                {output || 'No output yet.'}
+              </pre>
+            )}
           </div>
 
           {!isCompileWindowOpen && (

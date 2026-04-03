@@ -150,8 +150,11 @@ export default function EditorPage() {
         setOutput(o || '');
         if (lang) setSelectedLanguage(lang);
         setIsCompileWindowOpen(true);
+        setIsCompiling(false);
         if (triggeredBy && triggeredBy !== username) {
           toast(`${triggeredBy} ran the code`, { icon: '💻' });
+        } else if (!triggeredBy) {
+          toast.success('Code executed');
         }
       });
 
@@ -283,11 +286,14 @@ export default function EditorPage() {
         setActiveTestTab(0);
         result = data.results.map((r, i) => `Test ${i + 1}: ${r.passed ? '✓' : '✗'}`).join('  ');
       } else {
-        // No problem loaded — free compile
+        // No problem loaded — free compile via queue (result delivered via sync-output Socket.IO event)
         const stub = problem?.codeStubs?.find(s => s.language === selectedLanguage);
         const fullCode = stub?.driverCode ? `${codeRef.current}\n\n${stub.driverCode}` : codeRef.current;
-        const { data } = await axios.post(`${API_GATEWAY}/compile`, { code: fullCode, language: selectedLanguage, stdin: '' }, { timeout: 120000 });
-        result = data.output || data.error || JSON.stringify(data);
+        await axios.post(`${API_GATEWAY}/compile/queue`, { roomId, code: fullCode, language: selectedLanguage, stdin: '' });
+        clearTimeout(setupTimerRef.current);
+        setupTimerRef.current = null;
+        // isCompiling stays true — cleared by sync-output socket handler when result arrives
+        return;
       }
 
       setOutput(result);

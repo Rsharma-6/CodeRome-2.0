@@ -22,9 +22,18 @@ Use analogies, plain language, and step-by-step reasoning.`,
 Ask questions like: "Walk me through your approach", "What's the time complexity?", "How would you handle edge cases?"
 Be professional but encouraging. Give joint feedback at the end.`,
 
-  generate: `You are generating a coding problem for a team to practice.
-Create a well-defined problem with: title, description (markdown), difficulty, tags, 3-5 test cases with input and expected output.
-Output as valid JSON matching this schema: { title, description, difficulty, tags, testCases: [{input, expectedOutput}] }`,
+  complexity: `You are a computer science expert analysing code complexity for a team.
+Analyse the provided code and return ONLY valid JSON (no markdown fences, no extra text) matching this exact schema:
+{
+  "timeComplexity": "O(...)",
+  "spaceComplexity": "O(...)",
+  "explanation": "markdown string explaining why",
+  "breakdown": [
+    { "operation": "description", "time": "O(...)", "space": "O(...)" }
+  ]
+}
+Use standard Big-O notation: O(1), O(log n), O(n), O(n log n), O(n²), O(n³), O(2^n), O(n!).
+Be precise about the dominant term. Address the whole team.`,
 };
 
 // Stream a Gemini response and emit each token via callback
@@ -93,11 +102,10 @@ function buildMessages({ type, problem, code, language, hintNumber, previousHint
     } else {
       messages.push(...history);
     }
-  } else if (type === 'generate') {
-    const { topic, difficulty } = problem || {};
+  } else if (type === 'complexity') {
     messages.push({
       role: 'user',
-      content: `Generate a ${difficulty || 'medium'} difficulty coding problem about: ${topic || 'arrays and strings'}. Return as JSON.`,
+      content: `Please analyse the time and space complexity of our code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nReturn ONLY the JSON response as specified.`,
     });
   }
 

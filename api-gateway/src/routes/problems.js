@@ -3,6 +3,10 @@ const axios = require('axios');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { enqueueSubmission, enqueueAI } = require('../producers/index');
 
+function normalizeOutput(s) {
+  return (s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
+
 const router = express.Router();
 const STORAGE_URL = () => process.env.STORAGE_SERVICE_URL || 'http://localhost:5002';
 
@@ -46,9 +50,9 @@ router.post('/:id/run', optionalAuth, async (req, res) => {
         const { data } = await axios.post(`${COMPILER_URL()}/compile`, {
           code: fullCode, language, stdin: tc.input,
         }, { timeout: 15000 });
-        const actual = (data.output || '').trim();
-        const expected = (tc.expectedOutput || '').trim();
-        return { input: tc.input, expected, actual, passed: !data.error && actual === expected, error: data.error || null };
+        const actual = normalizeOutput(data.output);
+        const expected = normalizeOutput(tc.expectedOutput);
+        return { input: tc.input, expected, actual, passed: data.exitCode === 0 && actual === expected, error: data.error || null };
       } catch {
         return { input: tc.input, expected: tc.expectedOutput, actual: '', passed: false, error: 'Execution failed' };
       }
@@ -74,19 +78,8 @@ router.post('/:id/submit', optionalAuth, async (req, res) => {
     );
     const { testCases, driverCode } = tcData;
 
-    // Create submission record
-    const { data: submission } = await axios.post(`${STORAGE_URL()}/submissions`, {
-      roomId,
-      userId: req.user?.userId || null,
-      problemId: req.params.id,
-      code,
-      language,
-      status: 'PENDING',
-    });
-
-    // Enqueue for evaluation
+    // Enqueue for evaluation — submission record is created by resultWorker on completion
     await enqueueSubmission({
-      submissionId: submission._id,
       userId: req.user?.userId || null,
       roomId,
       problemId: req.params.id,
@@ -96,7 +89,7 @@ router.post('/:id/submit', optionalAuth, async (req, res) => {
       driverCode,
     });
 
-    res.json({ submissionId: submission._id, status: 'PENDING' });
+    res.json({ status: 'queued' });
   } catch (err) {
     res.status(err.response?.status || 500).json({ error: err.message });
   }

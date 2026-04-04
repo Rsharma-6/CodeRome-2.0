@@ -4,6 +4,10 @@ const { executeCode } = require('../executors/codeExecutor');
 const { ResultQueue } = require('../queues/index');
 const logger = require('../config/logger');
 
+function normalizeOutput(s) {
+  return (s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
+
 function startSubmissionWorker() {
   const worker = new Worker(
     'SubmissionQueue',
@@ -18,9 +22,9 @@ function startSubmissionWorker() {
         const fullCode = driverCode ? `${code}\n\n${driverCode}` : code;
         const result = await executeCode(language, fullCode, tc.input);
 
-        const actualOutput = (result.output || '').trim();
-        const expectedOutput = (tc.expectedOutput || '').trim();
-        const passed = !result.error && actualOutput === expectedOutput;
+        const actualOutput = normalizeOutput(result.output);
+        const expectedOutput = normalizeOutput(tc.expectedOutput);
+        const passed = result.exitCode === 0 && actualOutput === expectedOutput;
 
         if (!passed) {
           if (result.error && result.error.includes('Time Limit')) {
@@ -48,13 +52,13 @@ function startSubmissionWorker() {
       await ResultQueue.add('ResultJob', {
         type: 'submission',
         roomId,
-        submissionId,
         userId,
         problemId,
         payload: {
           status: overallStatus,
           results: testResults,
           language,
+          code,
         },
       });
 

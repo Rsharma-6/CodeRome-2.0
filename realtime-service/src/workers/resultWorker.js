@@ -10,7 +10,7 @@ function startResultWorker(io) {
   const worker = new Worker(
     'ResultQueue',
     async (job) => {
-      const { type, roomId, submissionId, userId, problemId, payload } = job.data;
+      const { type, roomId, userId, problemId, payload } = job.data;
 
       if (type === 'compile') {
         // Broadcast compilation result to all room users
@@ -22,12 +22,21 @@ function startResultWorker(io) {
           error: payload.error,
         });
       } else if (type === 'submission') {
-        // Update submission in storage
-        if (submissionId) {
-          await axios.patch(`${STORAGE_URL()}/submissions/${submissionId}`, {
+        // Create submission record with final status (no longer pre-created as PENDING)
+        let submissionId = null;
+        try {
+          const { data: saved } = await axios.post(`${STORAGE_URL()}/submissions`, {
+            roomId,
+            userId,
+            problemId,
+            code: payload.code,
+            language: payload.language,
             status: payload.status,
             results: payload.results,
-          }).catch(err => logger.error('Failed to update submission', { submissionId, error: err.message }));
+          });
+          submissionId = saved._id;
+        } catch (err) {
+          logger.error('Failed to save submission', { roomId, error: err.message });
         }
 
         // If ACCEPTED, update user progress for all logged-in room users

@@ -1,0 +1,58 @@
+/* CodeMirror dark theme fixes */
+.CodeMirror {
+  height: 100% !important;
+  background: #0d1117 !important;
+  color: #c9d1d9 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 14px !important;
+}
+
+.CodeMirror-gutters {
+  background: #161b22 !important;
+  border-right: 1px solid #30363d !important;
+}
+
+.CodeMirror-linenumber {
+  color: #8b949e !important;
+}
+
+.CodeMirror-cursor {
+  border-left: 2px solid #58a6ff !important;
+}
+
+/* Prose styles for ReactMarkdown */
+.prose-invert pre {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.prose-invert code {
+  background: #161b22;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 0.85em;
+  color: #ff7b72;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.prose-invert a {
+  color: #58a6ff;
+}
+
+.prose-invert h1, .prose-invert h2, .prose-invert h3 {
+  color: #e6edf3;
+}
+
+.prose-invert p {
+  color: #8b949e;
+  margin: 6px 0;
+}
+
+.prose-invert ul, .prose-invert ol {
+  color: #8b949e;
+  padding-left: 16px;
+}

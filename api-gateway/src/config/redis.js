@@ -1,15 +1,10 @@
 const Redis = require('ioredis');
 
-const redisConnection = process.env.REDIS_URL
-  ? new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-    })
-  : new Redis({
-      host: process.env.REDIS_HOST || '127.0.0.1',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD || undefined,
-      maxRetriesPerRequest: null,
-    });
+if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required');
+
+const redisConnection = new Redis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: null,
+});
 
 redisConnection.on('error', (err) => {
   console.error('[Redis] Connection error:', err.message);

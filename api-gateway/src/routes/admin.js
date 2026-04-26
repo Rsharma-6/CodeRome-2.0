@@ -1,17 +1,10 @@
 const express = require('express');
 const axios = require('axios');
-const Redis = require('ioredis');
 const { requireAdmin } = require('../middleware/auth');
+const redis = require('../config/redis');
 
 const router = express.Router();
 const STORAGE_URL = () => process.env.STORAGE_SERVICE_URL || 'http://localhost:5002';
-
-// Shared Redis client for room lookups
-const redis = new Redis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD || undefined,
-});
 
 // All routes require admin
 router.use(requireAdmin);

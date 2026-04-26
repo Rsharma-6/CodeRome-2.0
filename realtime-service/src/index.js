@@ -26,11 +26,8 @@ app.use(express.json());
 // ---------------------
 // Redis Setup (for room state)
 // ---------------------
-const redis = new Redis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD || undefined,
-});
+if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required');
+const redis = new Redis(process.env.REDIS_URL);
 
 // ---------------------
 // Socket.IO

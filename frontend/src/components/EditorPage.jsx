@@ -358,7 +358,7 @@ export default function EditorPage() {
       {/* Top Bar */}
       <div className="border-b border-border px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-primary font-bold font-code text-sm">{'<CodeRome />'}</span>
+          <span className="text-primary font-bold font-code text-base">{'<CodeRome/>'}</span>
           {problem && (
             <span className="text-muted text-sm">
               {problem.title}
@@ -449,17 +449,37 @@ export default function EditorPage() {
           <div className="flex-1 overflow-y-auto p-3">
             {problem ? (
               <div>
-                <h3 className="font-semibold text-sm mb-2">{problem.title}</h3>
-                <div className="prose prose-invert prose-sm max-w-none text-xs text-muted">
+                <h3 className="font-semibold text-sm mb-1">{problem.title}</h3>
+                <div className={`mb-3 badge-${problem.difficulty} inline-block`}>{problem.difficulty}</div>
+                {problem.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {problem.tags.map(t => (
+                      <span key={t} className="text-xs text-muted bg-surface border border-border px-1.5 py-0.5 rounded">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="prose prose-invert prose-sm max-w-none">
                   <ReactMarkdown>{problem.description}</ReactMarkdown>
                 </div>
                 {problem.testCases?.length > 0 && (
-                  <div className="mt-3">
-                    <div className="text-xs font-medium text-muted mb-1">Examples:</div>
-                    {problem.testCases.slice(0, 2).map((tc, i) => (
-                      <div key={i} className="bg-bg rounded p-2 text-xs font-code mb-2">
-                        {tc.input && <div><span className="text-muted">In:</span> {tc.input}</div>}
-                        <div><span className="text-muted">Out:</span> <span className="text-success">{tc.expectedOutput}</span></div>
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Examples</div>
+                    {problem.testCases.slice(0, 3).map((tc, i) => (
+                      <div key={i} className="bg-bg border border-border rounded-lg overflow-hidden mb-2">
+                        <div className="px-2.5 py-1 bg-surface border-b border-border">
+                          <span className="text-xs font-medium text-muted">Example {i + 1}</span>
+                        </div>
+                        <div className="px-2.5 py-2 space-y-1 font-code text-xs">
+                          {tc.input && (
+                            <div><span className="text-muted">Input: </span><span className="text-white">{tc.input}</span></div>
+                          )}
+                          <div><span className="text-muted">Output: </span><span className="text-success">{tc.expectedOutput}</span></div>
+                          {tc.explanation && (
+                            <div className="text-muted mt-1 pt-1 border-t border-border">{tc.explanation}</div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

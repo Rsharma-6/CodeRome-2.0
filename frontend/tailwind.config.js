@@ -7,9 +7,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        // GitHub dark design system (from plan)
         bg: '#0d1117',
         surface: '#161b22',
+        surface2: '#1c2128',
         border: '#30363d',
         primary: '#58a6ff',
         success: '#3fb950',
@@ -20,7 +20,12 @@ export default {
       },
       fontFamily: {
         code: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        ui: ['Inter', 'system-ui', 'sans-serif'],
+        ui: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        'glow-primary': '0 0 20px rgba(88, 166, 255, 0.15)',
+        'glow-ai': '0 0 20px rgba(163, 113, 247, 0.15)',
+        'card': '0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.6)',
       },
     },
   },

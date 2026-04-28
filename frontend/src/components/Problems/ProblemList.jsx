@@ -66,14 +66,19 @@ export default function ProblemList() {
     <>
     <div className="min-h-screen bg-bg">
       {/* Navbar */}
-      <nav className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <Link to="/" className="text-primary font-bold font-code">{'<CodeRome />'}</Link>
-        <div className="flex items-center gap-3">
+      <nav className="sticky top-0 z-20 border-b border-border/60 px-6 py-3.5 flex items-center justify-between backdrop-blur-sm bg-bg/90">
+        <Link to="/" className="text-primary font-bold font-code tracking-tight text-lg">{'<CodeRome/>'}</Link>
+        <div className="flex items-center gap-2.5">
           {user ? (
             <>
-              <Link to="/profile" className="text-muted hover:text-white text-sm">{user.username}</Link>
+              <Link to="/profile" className="nav-link font-medium">{user.username}</Link>
               {user.isAdmin && (
-                <Link to="/admin" className="text-xs text-primary border border-primary px-2 py-1 rounded hover:bg-blue-950 transition-colors">Admin</Link>
+                <Link
+                  to="/admin"
+                  className="text-xs text-primary border border-primary/50 px-2.5 py-1 rounded-lg hover:bg-primary/10 transition-colors"
+                >
+                  Admin
+                </Link>
               )}
               {showJoinInput ? (
                 <form onSubmit={handleJoinRoom} className="flex items-center gap-2">
@@ -83,19 +88,25 @@ export default function ProblemList() {
                     value={joinRoomId}
                     onChange={(e) => setJoinRoomId(e.target.value)}
                     placeholder="Enter Room ID"
-                    className="input-field text-sm py-1 px-2 w-44"
+                    className="input-field text-sm py-1.5 px-2.5 w-44"
                   />
-                  <button type="submit" className="btn-success text-sm">Go</button>
-                  <button type="button" onClick={() => { setShowJoinInput(false); setJoinRoomId(''); }} className="text-muted hover:text-white text-sm">✕</button>
+                  <button type="submit" className="btn-success text-sm py-1.5 px-3">Go</button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowJoinInput(false); setJoinRoomId(''); }}
+                    className="text-muted hover:text-white transition-colors text-sm"
+                  >
+                    ✕
+                  </button>
                 </form>
               ) : (
-                <button onClick={() => setShowJoinInput(true)} className="btn-secondary text-sm">
+                <button onClick={() => setShowJoinInput(true)} className="btn-secondary text-sm py-1.5">
                   Join Room
                 </button>
               )}
-              <Link to="/my-rooms" className="btn-secondary text-sm">My Rooms</Link>
-              <button onClick={() => handleSolveWithTeam(null)} className="btn-primary text-sm">
-                New Room
+              <Link to="/my-rooms" className="btn-secondary text-sm py-1.5">My Rooms</Link>
+              <button onClick={() => handleSolveWithTeam(null)} className="btn-primary text-sm py-1.5">
+                + New Room
               </button>
             </>
           ) : (
@@ -105,16 +116,19 @@ export default function ProblemList() {
       </nav>
 
       {activeRoom && (
-        <div className="bg-blue-950 border-b border-primary/40 px-6 py-3 flex items-center justify-between">
-          <span className="text-sm text-white">You have an active room session.</span>
+        <div className="bg-primary/10 border-b border-primary/30 px-6 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-white/80">You have an active room session.</span>
+          </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(`/room/${activeRoom}`, { state: { username: user.username } })}
-              className="btn-primary text-sm px-4 py-1.5"
+              className="btn-primary text-xs px-3 py-1.5"
             >
-              Rejoin Room
+              Rejoin Room →
             </button>
-            <button onClick={() => setActiveRoom(null)} className="text-muted hover:text-white text-sm">Dismiss</button>
+            <button onClick={() => setActiveRoom(null)} className="nav-link text-xs">Dismiss</button>
           </div>
         </div>
       )}
@@ -124,20 +138,20 @@ export default function ProblemList() {
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <input
             type="text"
-            placeholder="🔍 Search problems..."
+            placeholder="Search problems..."
             value={filter.search}
             onChange={(e) => setFilter({ ...filter, search: e.target.value })}
             className="input-field max-w-sm"
           />
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {DIFFICULTIES.map(d => (
               <button
                 key={d}
                 onClick={() => setFilter({ ...filter, difficulty: d })}
-                className={`px-3 py-1.5 rounded-md text-sm border transition-colors capitalize ${
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-all duration-150 capitalize font-medium ${
                   filter.difficulty === d
-                    ? 'border-primary text-primary bg-blue-950'
-                    : 'border-border text-muted hover:border-muted'
+                    ? 'border-primary/60 text-primary bg-primary/10'
+                    : 'border-border text-muted hover:border-border/80 hover:text-white/70'
                 }`}
               >
                 {d}
@@ -150,25 +164,33 @@ export default function ProblemList() {
         <div className="card overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-border text-left text-muted text-sm">
-                <th className="px-4 py-3 w-10">#</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3 w-28">Difficulty</th>
-                <th className="px-4 py-3 w-40">Tags</th>
-                <th className="px-4 py-3 w-40"></th>
+              <tr className="border-b border-border bg-surface2 text-left">
+                <th className="px-4 py-3 w-10 section-label">#</th>
+                <th className="px-4 py-3 section-label">Title</th>
+                <th className="px-4 py-3 w-28 section-label">Difficulty</th>
+                <th className="px-4 py-3 w-40 section-label">Tags</th>
+                <th className="px-4 py-3 w-40" />
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted">Loading...</td>
+                  <td colSpan={5} className="px-4 py-16 text-center">
+                    <div className="flex items-center justify-center gap-2 text-muted">
+                      <span className="w-4 h-4 border-2 border-muted/30 border-t-muted rounded-full animate-spin" />
+                      Loading problems...
+                    </div>
+                  </td>
                 </tr>
               ) : problems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={5} className="px-4 py-16 text-center text-muted">
                     No problems found.{' '}
                     {filter.search || filter.difficulty !== 'all' ? (
-                      <button onClick={() => setFilter({ difficulty: 'all', search: '' })} className="text-primary hover:underline">
+                      <button
+                        onClick={() => setFilter({ difficulty: 'all', search: '' })}
+                        className="text-primary hover:underline ml-1"
+                      >
                         Clear filters
                       </button>
                     ) : null}
@@ -176,29 +198,35 @@ export default function ProblemList() {
                 </tr>
               ) : (
                 problems.map((p, idx) => (
-                  <tr key={p._id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
-                    <td className="px-4 py-3 text-muted text-sm">{idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <Link to={`/problems/${p._id}`} className="hover:text-primary transition-colors font-medium">
+                  <tr
+                    key={p._id}
+                    className="border-b border-border/60 last:border-0 hover:bg-surface2/60 transition-colors group"
+                  >
+                    <td className="px-4 py-3.5 text-muted text-sm font-mono">{idx + 1}</td>
+                    <td className="px-4 py-3.5">
+                      <Link
+                        to={`/problems/${p._id}`}
+                        className="hover:text-primary transition-colors font-medium group-hover:text-primary/90"
+                      >
                         {p.title}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <span className={`badge-${p.difficulty}`}>{p.difficulty}</span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <div className="flex flex-wrap gap-1">
                         {(p.tags || []).slice(0, 2).map(t => (
-                          <span key={t} className="text-xs text-muted bg-surface border border-border px-1.5 py-0.5 rounded">
+                          <span key={t} className="text-xs text-muted/80 bg-surface2 border border-border/60 px-1.5 py-0.5 rounded-md">
                             {t}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <button
                         onClick={() => handleSolveWithTeam(p._id)}
-                        className="text-sm text-primary hover:bg-blue-950 border border-primary px-3 py-1 rounded-md transition-colors"
+                        className="text-sm text-primary hover:bg-primary/10 border border-primary/40 hover:border-primary/70 px-3 py-1.5 rounded-lg transition-all duration-150 font-medium"
                       >
                         Solve with Team →
                       </button>

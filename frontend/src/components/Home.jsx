@@ -30,7 +30,7 @@ function Home() {
     <div className="min-h-screen bg-bg flex items-center justify-center px-4">
       <div className="card p-8 w-full max-w-md">
         <div className="text-center mb-6">
-          <Link to="/" className="text-primary text-2xl font-bold font-code">{'<CodeRome />'}</Link>
+          <Link to="/" className="text-primary text-2xl font-bold font-code">{'<CodeRome/>'}</Link>
           <p className="text-muted mt-2">Join or create a room</p>
         </div>
         <div className="space-y-4">

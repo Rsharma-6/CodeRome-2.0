@@ -61,7 +61,7 @@ export default function MyRooms() {
   return (
     <div className="min-h-screen bg-bg">
       <nav className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <Link to="/" className="text-primary font-bold font-code">{'<CodeRome />'}</Link>
+        <Link to="/" className="text-primary font-bold font-code">{'<CodeRome/>'}</Link>
         <div className="flex items-center gap-3">
           <Link to="/problems" className="text-muted hover:text-white text-sm">Problems</Link>
           <Link to="/profile" className="text-muted hover:text-white text-sm">{user?.username}</Link>

@@ -74,7 +74,7 @@ export default function Landing() {
             Real-time collaborative coding
           </div>
 
-          <h1 className="text-5xl sm:text-6xl font-bold mb-5 leading-tight tracking-tight">
+          <h1 className="text-5xl sm:text-6xl font-bold mb-5 leading-tight tracking-tight whitespace-nowrap">
             Code Together.{' '}
             <span className="gradient-text">Learn Together.</span>
           </h1>
